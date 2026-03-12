@@ -20,7 +20,17 @@ class ConvSoftmaxModel(nn.Module):
         return x
 
 
-if __name__ == "__main__":
+def onnx_runtime_pipeline():
+    # Python model
+    # ↓
+    # torch.onnx.export(dynamo=True)   ← uses TorchDynamo to capture graph
+    # ↓
+    # ONNX format (.onnx file)         ← serialized, portable model
+    # ↓
+    # ONNX Runtime (ort)               ← completely separate runtime, not PyTorch
+    # ↓
+    # ORT Execution Provider           ← CPU (MLAS), CUDA (cuDNN), TensorRT, etc.
+
     model = ConvSoftmaxModel(num_classes=10)
     model.eval()
 
@@ -81,3 +91,34 @@ if __name__ == "__main__":
         print(f"ORT sum per sample: {ort_output[0].sum(axis=1)}")  # Should be ~1.0
     except ImportError:
         print("onnxruntime not installed, skipping ORT inference. pip install onnxruntime")
+
+
+def cpu_inductor_pipeline():
+    # Python model
+    # ↓
+    # TorchDynamo          ← captures FX graph (device-agnostic)
+    # ↓
+    # AOT Autograd         ← traces forward + backward (device-agnostic, ATen IR level)
+    # ↓
+    # Inductor             ← generates C++/OpenMP code (CPU path)
+    # ↓
+    # C++ compiler         ← compiles to native binary (no Triton needed)
+
+    device = "cpu"  # Use CPU to leverage Inductor without Triton
+    model = ConvSoftmaxModel(num_classes=10).to(device)
+    model.eval()
+
+    dummy_input = torch.randn(1, 1, 28, 28)  # CPU tensor
+    compiled_model = torch.compile(model, backend="inductor")
+
+    with torch.no_grad():
+        output = compiled_model(dummy_input)
+
+    print(f"Device:       {dummy_input.device}")
+    print(f"Output shape: {output.shape}")
+    print(f"Sum per sample: {output.sum(dim=1)}")  # Should be ~1.0
+
+
+if __name__ == "__main__":
+    # onnx_runtime_pipeline()
+    cpu_inductor_pipeline()
