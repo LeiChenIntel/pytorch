@@ -109,7 +109,8 @@ def cpu_inductor_pipeline():
     model.eval()
 
     dummy_input = torch.randn(1, 1, 28, 28)  # CPU tensor
-    compiled_model = torch.compile(model, backend="inductor")
+    compiled_model = torch.compile(model, dynamic=False, backend="inductor",
+                                   options={"trace.enabled": True, "trace.graph_diagram": True})
 
     with torch.no_grad():
         output = compiled_model(dummy_input)

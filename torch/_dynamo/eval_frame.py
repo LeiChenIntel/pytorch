@@ -750,6 +750,7 @@ class _TorchDynamoContext:
         package: Optional[CompilePackage] = None,
         hooks: Optional[Hooks] = None,
     ) -> None:
+        print("_TorchDynamoContext:__init__")
         super().__init__()
         assert callable(callback) or callback is False or callback is None
         self.callback: DynamoCallback = callback
@@ -822,6 +823,7 @@ class _TorchDynamoContext:
         return None
 
     def __call__(self, fn: Any) -> Any:
+        print("_TorchDynamoContext:__call__")
         # public api for compiler config/options
         def get_compiler_config() -> Any:
             return self.compiler_config
@@ -888,6 +890,10 @@ class _TorchDynamoContext:
         # Optimize the forward method of torch.nn.Module object
         if isinstance(fn, torch.nn.Module):
             mod = fn
+            print("call OptimizedModule")
+            # mod is the raw, uncompiled torch.nn.Module that the user passed to torch.compile().
+            # It is a Python-based neural network module, not an FX graph.
+            # new_mod is NOT an FX graph.
             new_mod = OptimizedModule(mod, self)
             # Save the function pointer to find the original callable while nesting
             # of decorators.
@@ -1135,6 +1141,7 @@ class OptimizeContext(_TorchDynamoContext):
         package: Optional[CompilePackage] = None,
         hooks: Optional[Hooks] = None,
     ) -> None:
+        print("OptimizeContext:__init__")
         def on_enter() -> None:
             install_generation_tagging_init()
 
@@ -1474,6 +1481,7 @@ def check_for_incompatible_configs() -> None:
 
 
 def optimize(*args: Any, **kwargs: Any) -> Union[OptimizeContext, _NullDecorator]:
+    print("optimize")
     def rebuild_ctx() -> Union[OptimizeContext, _NullDecorator]:
         ca_kwargs_override = config.compiled_autograd_kwargs_override
         if ca_kwargs_override:

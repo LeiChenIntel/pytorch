@@ -46,11 +46,31 @@ MAX_JOBS=16 USE_ROCM=0 USE_XPU=0 python -m pip install --no-build-isolation -v -
 ```
 
 CMake command for reference:
+
 ```cmake
   cmake -GNinja -DBUILD_PYTHON=True -DBUILD_TEST=True -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/home/leichen1/develop/pytorch/torch -DCMAKE_PREFIX_PATH=/home/leichen1/develop/pytorch/pytorch-dev/lib/python3.10/site-packages;/home/leichen1/develop/pytorch/pytorch-dev: -DPython_EXECUTABLE=/home/leichen1/develop/pytorch/pytorch-dev/bin/python -DPython_NumPy_INCLUDE_DIR=/home/leichen1/develop/pytorch/pytorch-dev/lib/python3.10/site-packages/numpy/_core/include -DTORCH_BUILD_VERSION=2.11.0a0+gitf31baaa -DUSE_NUMPY=True -DUSE_ROCM=0 -DUSE_XPU=0 /home/leichen1/develop/pytorch
 ```
 
+Big Picture of PyTorch:
+
+```text
+torch.compile(model)
+       │
+       ▼
+  TorchDynamo          ← graph capture (Python bytecode → FX graph)
+       │
+       ▼
+  AOT Autograd         ← joint fwd+bwd graph tracing
+       │
+       ▼
+  TorchInductor        ← code generation (Triton / C++)
+       │
+       ▼
+  Fast GPU/CPU kernels
+```
+
 Run test cases:
+
 ```bash
 python test-0.py
 # logs dumps as
@@ -58,6 +78,21 @@ python test-0.py
 # /home/leichen1/develop/pytorch/torch/__init__.py
 ```
 
-Pipeline:
+Run model test cases:
+
+```bash
+python test-model.py
+# Add TORCHINDUCTOR_FORCE_DISABLE_CACHES=1 to disable cache and see the logs of compilation
+# logs dumps as
+# /home/leichen1/develop/pytorch/torch/_dynamo/pgo.py:538: UserWarning: dynamo_pgo force disabled by torch.compiler.config.force_disable_caches
+#   warn_once(
+# W0316 15:48:54.087000 60026 /home/leichen1/develop/pytorch/torch/_inductor/debug.py:520] [0/0] model__0_inference_0 debug trace: /home/leichen1/develop/pytorch/docs_dev/torch_compile_debug/run_2026_03_16_15_48_46_345885-pid_60026/torchinductor/model__0_inference_0.0
+# Device:       cpu
+# Output shape: torch.Size([1, 10])
+# Sum per sample: tensor([1.])
+```
+
+Call stack:
 The main entrypoint of TorchDynamo.
 `_optimize` in `torch/_dynamo/eval_frame.py`
+See call stack in [call_stack.md](copilot-logs/call_stack.md)
