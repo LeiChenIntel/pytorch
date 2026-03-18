@@ -101,6 +101,24 @@ result = self._torchdynamo_orig_backend(
     frame, cache_entry, self.hooks, frame_state, skip=1
 )
 ```
+```text
+CatchErrorsWrapper.__call__()
+    └── self._torchdynamo_orig_backend(frame, cache_entry, hooks, frame_state, skip=1)
+            │  (ConvertFrame.__call__)
+            └── self._inner_convert(frame, cache_entry, hooks, frame_state, skip=skip+1)
+                    │  (ConvertFrameAssert.__call__)
+                    └── _compile(code, globals, ..., compiler_fn, ...)
+                            └── _compile_inner(code, one_graph, hooks)
+                                    └── compile_frame(code, globals, ..., compiler_fn, ...)
+                                            └── transform(instructions, code_options)
+                                                    └── trace_frame(code, globals, ...)
+                                                            └── InstructionTranslator.run()
+                                                                    │
+                                                                    └── [FX graph built here]
+                                                                    └── output_graph.compile_subgraph()
+                                                                            └── compiler_fn(gm, inputs)
+                                                                                    └── [backend compiles FX graph]
+```
 
 ### Stage 5: `ConvertFrame.__call__()` — Tracking + error wrapping (convert_frame.py)
 
@@ -189,6 +207,36 @@ example_inputs = [...]
 # compiler_fn is the inductor backend (wrapped by WrapBackendDebug)
 compiled_fn = compiler_fn(gm, example_inputs)
 # → inductor lowers FX graph to Triton/C++ kernel
+```
+The call chain after tracer.run()
+```
+tracer.run()
+    │
+    ▼  iterates over bytecode instructions via step()
+InstructionTranslatorBase.step()
+    │
+    ▼  dispatches to handler based on opname
+RETURN_VALUE(inst)   ← or RETURN_CONST
+    │
+    ▼
+InstructionTranslator._return(inst)
+    │
+    ▼
+self.output.compile_subgraph(self, reason=..., stack_pops=1)
+    │
+    ▼
+OutputGraph.compile_and_call_fx_graph
+    │
+    ▼
+OutputGraph.call_user_compiler() # this is the boundary where Dynamo hands off to AOT Autograd
+#                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#                  AOT Autograd + Inductor run INSIDE here
+    │
+    ▼
+self.compiler_fn(gm, inputs)           # e.g. torch/_dynamo/backends/inductor.py
+    │
+    ▼
+def compile_fx() in compile_fx.py then _compile_fx_main() # the steps of AOT autograd
 ```
 
 ---

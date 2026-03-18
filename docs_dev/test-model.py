@@ -112,6 +112,7 @@ def cpu_inductor_pipeline():
     compiled_model = torch.compile(model, dynamic=False, backend="inductor",
                                    options={"trace.enabled": True, "trace.graph_diagram": True})
 
+    print("compiled_model created, running inference...")
     with torch.no_grad():
         output = compiled_model(dummy_input)
 

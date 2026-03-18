@@ -750,7 +750,7 @@ class _TorchDynamoContext:
         package: Optional[CompilePackage] = None,
         hooks: Optional[Hooks] = None,
     ) -> None:
-        print("_TorchDynamoContext:__init__")
+        # print("_TorchDynamoContext:__init__")
         super().__init__()
         assert callable(callback) or callback is False or callback is None
         self.callback: DynamoCallback = callback
@@ -961,7 +961,16 @@ class _TorchDynamoContext:
 
         @functools.wraps(fn)
         def compile_wrapper(*args: Any, **kwargs: Any) -> Any:
+            print("compiled_model(dummy_input) calls this function when compiling a model")
+            print("_TorchDynamoContext:compile_wrapper")
             prior = set_eval_frame(None)
+            # print(fn) fn can be the pytorch model
+            # <bound method Module._wrapped_call_impl of ConvSoftmaxModel(
+            #     (conv1): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+            # (conv2): Conv2d(32, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+            # (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+            # (fc): Linear(in_features=3136, out_features=10, bias=True)
+            # )>
             prior_eval_frame_override: _EvalFrameOverride | None = None
             if self.fullgraph:
                 prior_eval_frame_override = set_eval_frame_override(
@@ -1027,6 +1036,7 @@ class _TorchDynamoContext:
                 _maybe_set_eval_frame(_callback_from_stance(callback))
 
                 try:
+                    print("fn(*args, **kwargs)")
                     return fn(*args, **kwargs)
                 except (Unsupported, UncapturedHigherOrderOpError) as e:
                     if config.verbose:

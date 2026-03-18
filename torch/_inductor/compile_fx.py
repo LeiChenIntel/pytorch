@@ -2705,6 +2705,15 @@ def _compile_fx_main(
         decompositions = (
             decompositions if decompositions is not None else select_decomp_table()
         )
+        # Decompositions are a mechanism to rewrite complex/composite ops into simpler primitive ops before lowering to
+        # Inductor's IR.
+        # aten.silu.default → <lambda: x * sigmoid(x)>
+        # aten.gelu.default → <lambda: x * 0.5 * (1 + erf(x/sqrt(2)))>
+        # Why decompose?
+        # 1 Inductor coverage: Inductor's codegen handles primitives; complex ops may not have lowerings
+        # 2 Fusion: Decomposed ops can be fused by Inductor's scheduler
+        # 3 Autograd: AOT Autograd needs primitive ops to generate correct backward graphs
+        # 4 Cross-backend: Same decomp table works for CPU, CUDA, etc.
 
         def fw_compiler_base(
             gm: GraphModule,

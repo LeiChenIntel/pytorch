@@ -618,6 +618,7 @@ class ConvertFrameAssert:
         *,
         skip: int = 0,
     ) -> ConvertFrameReturn:
+        print("ConvertFrameAssert:__call__")
         increment_frame()
         code = frame.f_code
 
@@ -726,6 +727,7 @@ class ConvertFrameAssert:
 
         try:
             with compile_context(CompileContext(compile_id)):
+                print("ConvertFrameAssert:_compile")
                 result = _compile(
                     frame.f_code,
                     frame.f_globals,
@@ -817,6 +819,7 @@ def trace_frame(
 
     speculation_log.restart()  # type: ignore[has-type]
     exn_vt_stack = ExceptionStack()
+    # Dynamo is defined and initialized here
     tracer = InstructionTranslator(
         instructions,
         code,
@@ -841,6 +844,7 @@ def trace_frame(
         try:
             tracer.output.mark_bytecode_tracing_start()
             with tracing(tracer.output.tracing_context), tracer.set_current_tx():
+                # Dynamo translation is triggered here
                 tracer.run()
         except exc.UnspecializeRestartAnalysis:
             speculation_log.clear()  # type: ignore[has-type]
@@ -1546,6 +1550,26 @@ def _compile(
                 distributed_state=distributed_state,
                 package=package,
             )
+            print(f"[dynamo] compile_frame output for {code.co_name}:")
+            print(f"  bytecode: {dynamo_output.bytecode}")
+            print(f"  last_attempt_start_time: {dynamo_output.last_attempt_start_time}")
+            print(f"  tracer_output: {dynamo_output.tracer_output}")
+            output_graph = dynamo_output.tracer_output.output_graph
+            if output_graph is not None:
+                gm = output_graph.graph  # this is a torch.fx.GraphModule or Graph
+                # gm.print_tabular()
+                # Export to SVG/PNG using networkx + matplotlib
+                try:
+                    from torch.fx.passes.graph_drawer import FxGraphDrawer
+                    fxgm = torch.fx.GraphModule(torch.nn.Module(), gm)
+                    drawer = FxGraphDrawer(fxgm, code.co_name)
+                    # Export to SVG
+                    svg_path = f"dynamo_graph_{code.co_name}_{id(gm)}.svg"
+                    with open(svg_path, "wb") as f:
+                        f.write(drawer.get_dot_graph().create_svg())
+                    print(f"[dynamo] Graph SVG saved to: {svg_path}")
+                except Exception as e:
+                    print(f"[dynamo] Failed to draw graph: {e}")
         except exc.SkipFrame as e:
             if one_graph:
                 log.debug("No graph captured with export/fullgraph=True")
@@ -2046,6 +2070,7 @@ class ConvertFrame:
         frame_state: dict[str, Union[int, FrameStateSizeEntry]],
         skip: int = 0,
     ) -> ConvertFrameReturn:
+        print("ConvertFrame:__call__")
         input_codes.add(frame.f_code)
         counters["frames"]["total"] += 1
         try:
@@ -2231,6 +2256,7 @@ class CatchErrorsWrapper:
         cache_entry: Optional[CacheEntry],
         frame_state: dict[str, Union[int, FrameStateSizeEntry]],
     ) -> ConvertFrameReturn:
+        print("CatchErrorsWrapper:__call__")
         assert frame_state is not None
         input_codes.add(frame.f_code)
 
