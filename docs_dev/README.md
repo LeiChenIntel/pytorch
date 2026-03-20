@@ -90,6 +90,8 @@ python test-model.py
 # Device:       cpu
 # Output shape: torch.Size([1, 10])
 # Sum per sample: tensor([1.])
+
+# TORCH_LOGS="+dynamo"/TORCH_LOGS="+inductor" python test-model.py to dump more logs.
 ```
 
 Call stack:

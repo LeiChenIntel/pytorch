@@ -311,6 +311,7 @@ def pre_grad_passes(
         if config.is_predispatch:
             _run_pre_dispatch_passes(gm, example_inputs, add_passes, remove_passes)
         else:
+            print("config.is_predispatch is False")
             # We only log the graph with changes to avoid the excessive compilation time
             # https://fb.workplace.com/groups/257735836456307/permalink/633533465543207/
             if example_inputs is not None:

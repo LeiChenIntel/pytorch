@@ -163,7 +163,10 @@ dynamo_output = compile_frame(           # → transform_code_object + trace_fra
     compiler_fn,                         # inductor
     ...
 )
-
+# compile_frame returns a DynamoOutput which contains the FX graph produced by the Dynamo frontend stage.
+# But the backend compilation (e.g. AOT Autograd + Inductor) has already happened during the trace_frame call 
+# — specifically when InstructionTranslator calls compiler_fn(gm, example_inputs) via OutputGraph.call_user_compiler.
+# So by the time compile_frame returns, both the FX graph capture and the backend compilation are done.
 out_code    = dynamo_output.bytecode      # modified Python bytecode
 tracer_output = dynamo_output.tracer_output
 
@@ -236,7 +239,24 @@ OutputGraph.call_user_compiler() # this is the boundary where Dynamo hands off t
 self.compiler_fn(gm, inputs)           # e.g. torch/_dynamo/backends/inductor.py
     │
     ▼
-def compile_fx() in compile_fx.py then _compile_fx_main() # the steps of AOT autograd
+def compile_fx() in compile_fx.py then _compile_fx_main() # the steps of AOT autograd AND inductor happen here
+```
+
+### AOT Autogen + Inductor
+Graph pipeline:
+1. Pre-grad passes — _recursive_pre_grad_passes(model_, example_inputs_) — graph-level optimizations before AOT
+2. AOT Autograd — aot_autograd(...) — which:
+* Applies decompositions (rewriting ops into more primitive ones via select_decomp_table())
+* Traces through torch.autograd to create the joint forward+backward graph
+* Partitions it into fw_graph and bw_graph
+3. Inductor compilation — via fw_compiler / bw_compiler callbacks → compile_fx_inner → _compile_fx_inner
+```
+run_pre_grad_passes(...)
+    _recursive_pre_grad_passes(...)
+    pre_grad_passes(...) # pre_grad.py
+    │
+    ▼
+aot_autograd(...)
 ```
 
 ---

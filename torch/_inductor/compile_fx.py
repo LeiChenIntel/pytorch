@@ -2714,6 +2714,7 @@ def _compile_fx_main(
         # 2 Fusion: Decomposed ops can be fused by Inductor's scheduler
         # 3 Autograd: AOT Autograd needs primitive ops to generate correct backward graphs
         # 4 Cross-backend: Same decomp table works for CPU, CUDA, etc.
+        print("Decompositions table (%d entries):", len(decompositions))
 
         def fw_compiler_base(
             gm: GraphModule,
@@ -2856,6 +2857,7 @@ def _compile_fx_main(
             ),
         ):
             try:
+                print("aot_autograd in compile_fx.py")
                 return aot_autograd(
                     fw_compiler=fw_compiler,
                     bw_compiler=bw_compiler,
