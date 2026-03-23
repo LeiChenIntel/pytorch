@@ -363,8 +363,12 @@ def aot_stage2_compile(
     aot_state.aot_config.inference_compiler = inference_compiler
 
     if aot_state.needs_autograd and not aot_state.aot_config.pre_dispatch:
+        print("aot_stage2_autograd")
+        # for training
         return aot_stage2_autograd(aot_state, aot_graph_capture)
     else:
+        print("aot_stage2_inference")
+        # for inference
         return aot_stage2_inference(aot_state, aot_graph_capture)
 
 
@@ -443,6 +447,8 @@ def aot_stage2_inference(
         )
     _apply_tensorify_python_scalars(fw_module)
 
+    # 1. Compile (expensive - runs inference_compiler/Inductor/Triton)
+    # <-- cacheable result
     compiled_fw = _aot_stage2b_inference_compile(
         fw_module,
         updated_flat_args,  # type: ignore[arg-type]
@@ -451,6 +457,8 @@ def aot_stage2_inference(
         aot_config,
     )
 
+    # 2. Save to cache
+    # <-- save to cache
     entry = _cache_inference_info(
         aot_config,
         fw_metadata,
@@ -460,6 +468,8 @@ def aot_stage2_inference(
         wrappers,
     )
 
+    # 3. Wrap for runtime (always runs)
+    # <-- wrap for runtime
     return _aot_stage2c_make_inference_function(
         aot_config,
         fw_metadata,
@@ -2510,6 +2520,7 @@ def _aot_stage2b_compile_forward_or_inference(
 
         with TracingContext.report_output_strides() as fwd_output_strides:
             # pyrefly: ignore[not-callable]
+            print("compiler(fw_module, adjusted_flat_args)")
             compiled_fw_func = compiler(fw_module, adjusted_flat_args)
 
         # Make boxed if needed

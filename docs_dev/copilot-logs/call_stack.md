@@ -256,7 +256,20 @@ run_pre_grad_passes(...)
     pre_grad_passes(...) # pre_grad.py
     │
     ▼
-aot_autograd(...)
+aot_autograd(**kwargs)          # creates AotAutograd instance
+    AotAutograd.__call__(gm, inputs)  # invoked by dynamo backend dispatch
+        aot_module_simplified(...)   # actual AOT compilation
+            aot_stage1_graph_capture(...)
+            aot_stage2_compile(...)
+                aot_stage2_inference(...)
+                _aot_stage2b_compile_forward_or_inference(...)
+                compiler(fw_module, adjusted_flat_args)
+                compile_fx_inner in compile_fx.py
+                fx_codegen_and_compile(...)
+                codegen_and_compile(...)
+                    _recursive_post_grad_passes(...)
+                    GraphLowering.run()             # lower to Inductor IR
+                    GraphLowering.compile_to_fn()   # codegen Triton/C++ kernels
 ```
 
 ---

@@ -789,6 +789,7 @@ def compile_fx_inner(
     example_inputs: Sequence[InputType],
     **kwargs: Unpack[_CompileFxKwargs],
 ) -> OutputCode:
+    print("compile_fx_inner in compile_fx.py")
     kwargs.setdefault("cudagraphs", None)
     kwargs.setdefault("static_input_idxs", ())
     kwargs.setdefault("is_backward", False)
@@ -842,6 +843,7 @@ def _compile_fx_inner(
     If you change the argument list for this function, make sure you
     also update the call to save_args_for_compile_fx_inner below accordingly.
     """
+    print("_compile_fx_inner")
     aot_mode: bool = V.aot_compilation
 
     from torch._inductor.autotune_process import use_pipelined_autotuning
@@ -1221,6 +1223,7 @@ class _InProcessFxCompile(FxCompile):
         inputs_to_check: Sequence[int],
         graph_kwargs: _CompileFxKwargs,
     ) -> OutputCode:
+        print("codegen_and_compile")
         """
         Generates the OutputCode from the GraphModule and example_inputs.
         """
@@ -1341,6 +1344,7 @@ class _InProcessFxCompile(FxCompile):
                 # has some issues with memory in training
                 cuda_context = get_cuda_device_context(gm)
                 with cuda_context:
+                    print("_recursive_post_grad_passes")
                     _recursive_post_grad_passes(gm, is_inference=is_inference)
                 V.debug.fx_graph_transformed(gm, example_inputs)
                 post_grad_graphs_log.debug(
@@ -1482,6 +1486,16 @@ class _InProcessFxCompile(FxCompile):
                     V.set_extern_kernel_nodes([]),
                     distributed_autotune.graph_context(),
                 ):
+                    print("graph.run(*example_inputs)")
+                    try:
+                        from torch.fx.passes.graph_drawer import FxGraphDrawer
+                        drawer = FxGraphDrawer(gm, f"inductor_graph_{graph_id}_{id(gm)}")
+                        svg_path = f"before_inductor_graph_{graph_id}_{id(gm)}.svg"
+                        with open(svg_path, "wb") as f:
+                            f.write(drawer.get_dot_graph().create_svg())
+                        print(f"[inductor] Graph SVG saved to: {svg_path}")
+                    except Exception as e:
+                        print(f"[inductor] Failed to draw graph: {e}")
                     graph.run(*example_inputs)
                     output_strides: list[Optional[tuple[_StrideExprStr, ...]]] = []
                     if graph.graph_outputs is not None:
@@ -1567,6 +1581,7 @@ class _InProcessFxCompile(FxCompile):
                                     ],
                                 )
                         else:
+                            print("no graph.aot_mode and graph.fx_wrapper")
                             compiled_module = graph.compile_to_module()
                             compiled_fn = compiled_module.call
                             compiled_fn_runner = getattr(
@@ -1753,9 +1768,11 @@ def fx_codegen_and_compile(
     inputs_to_check: Sequence[int],
     **graph_kwargs: Unpack[_CompileFxKwargs],
 ) -> OutputCode:
+    print("fx_codegen_and_compile")
     scheme: FxCompile
 
     if fx_compile_mode == FxCompileMode.NORMAL:
+        print("_InProcessFxCompile()")
         scheme = _InProcessFxCompile()
     elif fx_compile_mode == FxCompileMode.SERIALIZE:
         from .compile_fx_ext import _DebugSerdeFxCompile
