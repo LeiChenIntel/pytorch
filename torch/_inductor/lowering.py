@@ -2969,6 +2969,8 @@ def sdpa_constraint(fx_node, *args, **kwargs):
     return args, kwargs
 
 
+make_fallback(aten._softmax, override_decomp=True)
+
 # WIP
 make_fallback(aten._adaptive_avg_pool3d)  # @isuruf
 make_fallback(aten.adaptive_max_pool3d)  # @isuruf

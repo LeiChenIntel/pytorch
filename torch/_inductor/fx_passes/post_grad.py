@@ -117,6 +117,7 @@ def post_grad_passes(gm: torch.fx.GraphModule, is_inference: bool):
 
     The IR here has been normalized and functionalized.
     """
+    print("This is the post_grad pass pipeline.")
     GraphTransformObserver = functools.partial(
         torch.fx.passes.graph_transform_observer.GraphTransformObserver,
         subsystem="post_grad_passes",
@@ -722,6 +723,42 @@ def decompose_scan_to_while_loop(gm: torch.fx.GraphModule):
         raise AssertionError("scan is not lowered to while_loop")
 
 
+def softmax_pattern(x, dim):
+    # what the decomposed graph looks like after aot_autograd
+    max_val = torch.ops.aten.amax(x, dim, keepdim=True)  # amax expects list
+    shifted = torch.ops.aten.sub(x, max_val)
+    exp_val = torch.ops.aten.exp(shifted)
+    sum_val = torch.ops.aten.sum(exp_val, dim, keepdim=True)  # sum expects list
+    return torch.ops.aten.div(exp_val, sum_val)
+
+
+def softmax_replacement(x, dim):
+    # Replace with a single op that Inductor can lower to one Triton kernel
+    # return torch.ops.aten.softmax(x, 1, False) # only for cuda (GPU)
+    # return torch.ops.aten.relu(x)
+    # 1. Post-grad pattern matching finds the decomposed amax → sub → exp → sum → div subgraph
+    # and replaces it with softmax.int via your softmax_replacement.
+    # 2. But register_replacement traces the replacement function using make_fx, which applies decompositions during tracing.
+    # So when softmax_replacement calls torch.ops.aten.softmax.int(x, dim), the tracer decomposes it right back into amax → sub → exp → sum → div.
+    return torch.ops.aten.softmax.int(x, dim) # cannot work since it will be decomposed back in the trace unless add fixing in lowering.py
+
+
+def fwd_only_no_softmax_decomp(fn, args):
+    from torch._decomp import get_decompositions, core_aten_decompositions
+    from torch.fx.experimental.proxy_tensor import make_fx
+
+    # Get the default decomposition table used in post-grad
+    decomp_table = dict(core_aten_decompositions())
+
+    # Remove softmax.int so it is NOT decomposed during tracing
+    decomp_table.pop(torch.ops.aten.softmax.int, None)
+    # decomp_table.pop(torch.ops.aten.special_softmax, None)
+    # decomp_table.pop(torch.ops.aten.softmax.Dimname, None)
+    decomp_table.pop(torch.ops.aten._softmax.default, None)  # <-- also remove this
+
+    return make_fx(fn, decomposition_table=decomp_table)(*args)
+
+
 @init_once_fakemode
 def lazy_init(input_device: Optional[torch.device] = None):
     if torch._C._has_mkldnn:
@@ -745,6 +782,17 @@ def lazy_init(input_device: Optional[torch.device] = None):
         # pyrefly: ignore [bad-argument-type]
         pass_dicts=pass_patterns[1],
         extra_check=prepare_softmax_extra_check,
+    )
+
+    print("register softmax pattern")
+    register_replacement(
+        softmax_pattern,
+        softmax_replacement,
+        [torch.empty(4, 8)],
+        scalar_workaround=dict(dim=-1),
+        trace_fn=fwd_only_no_softmax_decomp,  # <-- custom trace_fn instead of fwd_only to prevent decomposing the softmax in the replacement function
+        #trace_fn=fwd_only,
+        pass_dicts=pass_patterns[1],
     )
 
 
