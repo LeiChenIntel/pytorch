@@ -605,6 +605,7 @@ def joint_graph_passes(
     """
     Run FX transformations on the joint forwards+backwards graph.
     """
+    print("This is the joint_graph pass pipeline.")
     GraphTransformObserver = functools.partial(
         torch.fx.passes.graph_transform_observer.GraphTransformObserver,
         subsystem="joint_graph_passes",
